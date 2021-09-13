@@ -37,7 +37,6 @@ library(lfstat)
 
 # Set working directory to project location, not to the file location.
 getwd()
-#options(noaakey = "WgxkGIdkJHRcAruUTecWRIkEVptgKXGl")
 ```
 
 ## Acquiring NOAA Weather Data
@@ -82,6 +81,20 @@ manitowoc_weather_2021 <- lcd(station = "72645594897", year = 2021, verbose = TR
 
 ## Data Processing
 
+`rbind` allows us to bind rows together, one on top of the other. Data frames must have the same number of columns with the same names. 
+
+The `dplyr` package within `tidyverse` has a term called a pipe, designated as %>%. In coding language, the pipe means "then," allowing you to sequentially run functions on a given data frame. 
+
+Other wrangling functions we will use (feel free to add notes here or comment in the code): 
+
+* `select`
+* `drop_na`
+* `separate`
+* `mutate`
+* `filter`
+* `group_by`
+* `summarise`
+
 ```{r, message = FALSE, warning = FALSE}
 # combine all years
 manitowoc_weather <- rbind(manitowoc_weather_2012, manitowoc_weather_2013,
@@ -95,6 +108,7 @@ View(manitowoc_weather)
 
 # select columns for general info and daily conditions
 manitowoc_weather_daily <- manitowoc_weather %>%
+  #
   select(station:name, dailyaveragestationpressure, dailyaveragewindspeed, 
          dailymaximumdrybulbtemperature, dailyminimumdrybulbtemperature, 
          dailyprecipitation, dailyweather) 
@@ -103,21 +117,23 @@ View(manitowoc_weather_daily)
 # Precipitation: T indicates trace. Set to zero.
 # Precipitation: Blank represents times that were not sampled
 # Precipitation: s indicates suspect. Set to NA.
-manitowoc_weather_daily$dailyprecipitation[manitowoc_weather_daily$dailyprecipitation == "T"] <- 0
-manitowoc_weather_daily$dailyprecipitation <- as.numeric(manitowoc_weather_daily$dailyprecipitation)
+manitowoc_weather_daily$dailyprecipitation[manitowoc_weather_daily$dailyprecipitation == "T"] <- 0 #
+manitowoc_weather_daily$dailyprecipitation <- as.numeric(manitowoc_weather_daily$dailyprecipitation) #
 summary(manitowoc_weather_daily$dailyprecipitation)
 
 # Temperature: air temperature = dry bulb temperature. 
 # Temperature: s indicates suspect. Set to NA.
 manitowoc_weather_daily$dailymaximumdrybulbtemperature <-
-  as.numeric(manitowoc_weather_daily$dailymaximumdrybulbtemperature)
+  as.numeric(manitowoc_weather_daily$dailymaximumdrybulbtemperature) 
 manitowoc_weather_daily$dailyminimumdrybulbtemperature <-
   as.numeric(manitowoc_weather_daily$dailyminimumdrybulbtemperature)
 
 # remove rows that do not contain precipitation data
 # access date information
 manitowoc_weather_daily <- manitowoc_weather_daily %>%
-  drop_na(dailyprecipitation) %>%
+  #
+  drop_na(dailyprecipitation) %>% 
+  # 
   separate(col = date, into = c("Date", "Time"), sep = "T") 
 
 summary(manitowoc_weather_daily)
@@ -130,23 +146,52 @@ manitowoc_weather_daily$Date <- as.Date(manitowoc_weather_daily$Date, format = "
 # may want to use water year, not calendar year
 # notice data were not supplied prior to October 2013. Let's remove dates prior to 2014.
 manitowoc_weather_daily <- manitowoc_weather_daily %>%
+  #
   mutate(Year = year(Date), 
          WaterYear = water_year(Date, origin = "usgs"),
          Month = month(Date)) %>%
+  #
   filter(Year > 2013)
+```
+
+### Interpolate missing values
+
+We restricted our daily data to dates that have precipitation present. However, there are NA values in our temperature dataset. There are a few ways to interpolate missing data, *if deemed appropriate for your analysis needs*. 
+
+A few common interpolation methods for temporal data: 
+
+* **Piecewise constant, aka nearest neighbor**: assign same value as nearest data point
+* **Linear**: "connect the dots"
+* **Spline**: polynomial functions, results in curved interpolation line
+
+When working with spatial data, additional interpolation methods are commonly used, including **kriging**, **bilinear**, and **cubic convolutions**.
+
+If we want to fill in missing temperature data, it is a reasonable assumption that a missing daily temperature could be well-approximated by the average of the temperature on the day before and the day after. So, a linear interpolation would make sense here.
+
+Note: it may be beneficial to designate which values in your dataset were measured vs. interpolated. A few options to do this are (a) create a new column in your dataset for your variable that includes both measured and interpolated values (leaving the original column as-is), or (b) create a new column in your dataset designating whether the value in the variable's column is interpolated or not (0/1 or yes/no). 
+
+```{r}
+
+manitowoc_weather_daily$dailymaximumdrybulbtemperature <- na.approx(manitowoc_weather_daily$dailymaximumdrybulbtemperature)
+manitowoc_weather_daily$dailyminimumdrybulbtemperature <- na.approx(manitowoc_weather_daily$dailyminimumdrybulbtemperature, 
+                                                                    na.rm = FALSE)
+
 ```
 
 ## Data Aggregation
 
 From our daily data, let's aggregate those data up to monthly and annual conditions. Precipitation will be summed to generate monthly and yearly totals, and temperatures will be averaged. The mean function automatically generates a blank if an NA is supplied as part of the calculation, so 
+
 ```{r, message = FALSE, warning = FALSE}
 manitowoc_preciptemp_monthly <- manitowoc_weather_daily %>%
+  #
   group_by(WaterYear, Month) %>%
+  #
   summarise(monthlyprecipitation = sum(dailyprecipitation),
             avgmonthlymaxtemp = mean(dailymaximumdrybulbtemperature, na.rm = TRUE),
             avgmonthlymintemp = mean(dailyminimumdrybulbtemperature, na.rm = TRUE))
 
-# Your turn. Calculate annual precipitation by water year. 
+# Your turn. Calculate annual precipitation by water year, using a pipe
 manitowoc_preciptemp_annual <- manitowoc_weather_daily 
   
 
