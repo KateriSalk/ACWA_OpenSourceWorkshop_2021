@@ -173,8 +173,7 @@ Note: it may be beneficial to designate which values in your dataset were measur
 ```{r}
 
 manitowoc_weather_daily$dailymaximumdrybulbtemperature <- na.approx(manitowoc_weather_daily$dailymaximumdrybulbtemperature)
-manitowoc_weather_daily$dailyminimumdrybulbtemperature <- na.approx(manitowoc_weather_daily$dailyminimumdrybulbtemperature, 
-                                                                    na.rm = FALSE)
+manitowoc_weather_daily$dailyminimumdrybulbtemperature <- na.approx(manitowoc_weather_daily$dailyminimumdrybulbtemperature, na.rm = FALSE)
 
 ```
 

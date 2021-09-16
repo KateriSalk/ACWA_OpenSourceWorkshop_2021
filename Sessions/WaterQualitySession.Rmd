@@ -9,7 +9,7 @@ editor_options:
 
 ## Intro
 
-Water quality monitoring data can be used across multiple facets of water management, including exploration, stressor-response analysis, assessment, and TMDL development. ONe of the most comprehensive repositories for water quality data is the [Water Quality Portal](https://www.waterqualitydata.us/). The Water Quality Portal contains data collected by over 400 state, federal, tribal, and local agencies, including EPA STORET data and USGS NWIS data.
+Water quality monitoring data can be used across multiple facets of water management, including exploration, stressor-response analysis, assessment, and TMDL development. One of the most comprehensive repositories for water quality data is the [Water Quality Portal](https://www.waterqualitydata.us/). The Water Quality Portal contains data collected by over 400 state, federal, tribal, and local agencies, including EPA STORET data and USGS NWIS data. Processing and analyzing NOAA data is an ideal process to automate, since the data downloaded from NOAA's platform have a consistent format. 
 
 During this session, we will: 
 
@@ -96,14 +96,15 @@ Wrangling functions we will use (feel free to add notes here or comment in the c
 * `left_join`
 
 ```{r}
-
-ManitowocWQ$ActivityStartDate <- as.Date(ManitowocWQ$ActivityStartDate, format = "%Y/%m/%d")
-unique(ManitowocWQ$CharacteristicName)
 View(ManitowocWQ)
+
+ManitowocWQ$ActivityStartDate <- as.Date(ManitowocWQ$ActivityStartDate, format = "%Y-%m-%d")
+unique(ManitowocWQ$CharacteristicName)
 
 # Some cells in ResultMeasureValue have * or ND noted. 
 # Since no columns are available to tell us what these codes mean, we will set these values to NA.
 # Setting the column to numeric will set any cells containing non-numeric characters to NA.
+class(ManitowocWQ$ResultMeasureValue)
 ManitowocWQ$ResultMeasureValue <- as.numeric(ManitowocWQ$ResultMeasureValue)
 
 # example: if MeasureQualifierCode has a "U", set value to 1/2 quantitation limit
