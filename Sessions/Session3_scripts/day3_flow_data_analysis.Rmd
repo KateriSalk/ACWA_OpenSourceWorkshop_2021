@@ -1,0 +1,901 @@
+---
+title: "Analysis of Flow Data"
+author: "Eric Hettler, Wisconsin DNR"
+date: '2021-09-22'
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+editor_options: 
+  chunk_output_type: console
+---
+## Intro
+
+This example uses the USGS station at the Manitowoc River in Wisconsin (04085427) to explore the functionality of the dataRetrieval package.
+
+## Setup
+```{r setup, include=FALSE}
+
+#install.packages("dataRetrieval")
+#install.packages("tidyverse")
+#install.packages("ggplot2")
+#install.packages("lubridate")
+#install.packages("plotly")
+#install.packages("EcoHydRology")
+#install.packages("lfstat")
+
+library(dataRetrieval)
+library(EcoHydRology)
+library(tidyverse)
+library(ggplot2)
+library(lubridate)
+library(plotly)
+library(EcoHydRology)
+library(lfstat)
+
+# set the project directory as the working directory
+getwd()
+
+```
+
+## Step 1: Define station of interest and get information about the station
+
+Information about the data availability and characteristics at the station of interest are evaluated and summarized. Code is provided to evaluate data availability for both discharge and water quality data. For the purposes of this exercise, however, only the results from the discharge data analysis are used.
+
+```{r, message = FALSE, warning = FALSE}
+
+# set station_no to USGS code - this example uses the USGS gage for the Manitowoc River at Manitowoc (04085427)
+station_no <- "04085427"
+
+# download information about the NWIS site
+station_info <- dataRetrieval::readNWISsite(station_no)
+
+#select parameter for discharge ("00060")
+parameter_cd <- "00060"
+
+# check station name
+station_info$station_nm
+
+# load a table with NWIS codes
+nwis_codes <- read.csv(file = "./Data/raw/nwis_parameter_codes.csv")
+
+# add a column to nwis_codes that is the same name as the parameter code in whatNWISdata
+nwis_codes <- nwis_codes %>%
+  mutate(parm_cd = parameter_cd)
+
+# identify what daily data are available for station
+daily_data_availability <- dataRetrieval::whatNWISdata(siteNumber = station_no, service = "dv", statCd = "00003")
+
+# join the nwis_code data with the daily_data_availability data
+daily_data_availability <- left_join(daily_data_availability, nwis_codes, by = "parm_cd")
+
+# trim down daily_data_availablility to review only relevant parameters
+daily_data_availability <- daily_data_availability %>%
+  select(site_no, station_nm, parm_cd, parameter_nm, begin_date, end_date, count_nu)
+
+# view daily_data_availability
+daily_data_availability
+
+# do the same for water quality data
+wq_data_availability <- whatNWISdata(siteNumber = station_no, service = "qw", statCd = "00003")
+wq_data_availability <- left_join(wq_data_availability, nwis_codes, by = "parm_cd")
+wq_data_availability <- wq_data_availability %>%
+  select(site_no, station_nm, parm_cd, parm_grp_cd, parameter_nm, begin_date, end_date, count_nu)
+
+# water quality data have many parameters with only a few samples; look for parameters with >100
+wq_data_availability <- wq_data_availability %>%
+  filter(!is.na(parm_cd)) %>% #remove NA values
+  filter(parm_grp_cd == "NUT") %>% #select only nutrient data
+  filter(count_nu >= 100) #remove values with fewer than 100 samples
+
+# view wq_data_availability
+wq_data_availability
+
+# extract data just for the discharge data
+discharge_details <- daily_data_availability %>%
+  filter(parm_cd == "00060")
+
+# view discharge_details
+discharge_details
+
+# find start date and end date of discharge data
+start_date <- discharge_details$begin_date
+end_date <- discharge_details$end_date
+
+
+# remove unncessary parameters
+rm(daily_data_availability, nwis_codes, wq_data_availability, discharge_details)
+
+```
+
+## Step 2: Download data from NWIS
+
+Data are downloaded from NWIS. The following items are downloaded:
+  - Daily discharge data for entire period of record
+  - Instantaneous discharge data since 2020-01-01
+  - Rating curve for USGS site
+  - Monthly flow statistics
+  - Annual flow statistics
+
+```{r, message = FALSE, warning = FALSE}
+
+#select parameter for discharge ("00060")
+parameter_code <- "00060"
+
+#load daily flow data for the site
+discharge_data <- dataRetrieval::readNWISdv(siteNumbers = station_no, 
+                                            parameterCd = parameter_code, 
+                                            startDate = start_date, 
+                                            endDate = end_date)
+
+# load instantaneous data for the site
+inst_discharge_data <- dataRetrieval::readNWISuv(siteNumbers = station_no, 
+                                                 parameterCd = parameter_code, 
+                                                 startDate = as.Date("2020-01-01"), 
+                                                 endDate = end_date, 
+                                                 tz = "America/Chicago")
+
+# load rating curve data for the site
+rating_curve <- dataRetrieval::readNWISrating(siteNumber = station_no)
+
+# plot rating curve
+plot(DEP ~ INDEP, 
+     data = rating_curve, 
+     type = "l", 
+     xlab = "Depth (ft)", 
+     ylab = "Discharge (cfs)",
+     cex.lab = 2)
+
+# load monthly summary statistics for site
+monthly_stats <- dataRetrieval::readNWISstat(siteNumbers = station_no, 
+                                             parameterCd = parameter_code, 
+                                             statReportType = "monthly")
+
+# load annual summary statistics for site
+annual_stats <- dataRetrieval::readNWISstat(siteNumbers = station_no,
+                                            parameterCd = parameter_code,
+                                            statReportType = "annual")
+
+# plot annual summary
+barplot(mean_va ~ year_nu,
+     data = annual_stats,
+     type = "bar",
+     xlab = element_blank(),
+     ylab = "Average Annual Discharge (cfs)",
+     cex.lab = 1.5)
+
+#remove newly created objects
+rm(inst_discharge_data, rating_curve, monthly_stats, annual_stats)
+
+```
+
+## Step 3: Explore data with base plotting functions in R
+
+Data downloaded in Step 2 is evaluated and summarized using the base plotting functions provided in R. In this section, a function called `make_plot` is created which allows the user to easily create formatted plots by entering specified start and end dates. The end of the chunk downloads the resulting figure to a jpeg file.
+
+```{r, message = FALSE, warning = FALSE}
+
+#use base plot functions to explore data - plots as points
+plot(X_00060_00003 ~ Date, data = discharge_data)
+
+##use additional parameters in base plot function to clean up figure
+#set plot title name
+plot_title <- paste("Station", station_no, "Discharge", sep = " ")
+
+#use the base plot function to plot discharge data
+plot(X_00060_00003 ~ Date, 
+     data = discharge_data,
+     main = plot_title,
+     xlab = element_blank(),
+     ylab = "Daily discharge (cfs)",
+     type = "l")
+
+# create a function that creates the plot
+make_plot <- function(startDate, endDate){
+  
+  # use the base plot function to format the plot
+  plot(X_00060_00003 ~ Date, 
+       data = discharge_data,
+       main = plot_title,
+       xlab = "Year",
+       ylab = "Daily discharge (cfs)",
+       type = "l",
+       col = "midnightblue",
+       xlim = c(startDate, endDate),
+       ylim = c(0,7000)
+       )
+  
+  # add lines for mean and median discharges
+  abline(h = median(discharge_data$X_00060_00003, na.rm = TRUE), 
+         col = "gray30", 
+         lwd = 2)
+  abline(h = mean(discharge_data$X_00060_00003, na.rm = TRUE), 
+         col = "green4", 
+         lty = "dashed", 
+         lwd = 2)
+  
+  #add a legend
+  legend("topleft", 
+         legend = c("Discharge (cfs)", "Mean discharge (cfs)", "Median discharge (cfs)"),
+         col = c("midnightblue", "green4", "gray30"), 
+         lty = 1:2, 
+         inset = 0.01)
+
+}
+
+#call function make_plot to plot function
+make_plot(startDate = as.Date("2010-01-01"), endDate = end_date)
+
+##save figure to a .jpeg file
+#create a file name for the .jpeg file
+file_name <- paste0("./Output/discharge_", station_no, ".jpeg")
+
+#initialize the jpeg save function
+jpeg(file = file_name, width = 600, height = 400, units = "px")
+
+# remove unncessary variables
+rm(file_name, plot_title, make_plot)
+
+```
+
+## Step 4: Explore data with ggplot function
+
+Data are plotted using the `ggplot2` package. `ggplot` allows users to easily create and format plots. Plotting with `ggplot` is more flexible than the base R plotting functions because it uses the "Grammar of Graphics" to allow easy additions to the plots. The following plots are created:
+
+- Discharge over time
+- Comparison of two years
+- Regression comparing annual flow over time
+- Average monthly flow
+
+```{r, message = FALSE, warning = FALSE}
+
+# plot the discharge data with ggplot
+p <- ggplot2::ggplot(aes(Date, X_00060_00003), data = discharge_data) + 
+  geom_line() +
+  xlab("Year") + 
+  ylab ("Discharge(cfs)") + 
+  xlim(c(as.Date("2010-01-01"), as.Date("2019-12-31"))) + 
+  ylim(c(0,6000))
+
+# print the figure
+p
+
+#set a new theme for the figure
+theme_set <-   theme_bw() +
+  theme(axis.line = element_line(color = 'black'),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_blank(),
+        text = element_text(size = 16))
+ 
+# update figure to include labels, themes, and axis limits
+p1 <- p +
+  xlab("Year") + 
+  ylab ("Discharge(cfs)") + 
+  xlim(c(as.Date("2010-01-01"), as.Date("2019-12-31"))) + 
+  ylim(c(0,6000)) + 
+  theme_set
+
+# print the figure
+p1
+
+#remove unncessary objects
+rm(p, p1, theme_set)
+
+## compare two specific years of data
+# create a function that accepts two years for flow comparison and returns a plotting function
+compare_yrs_plot <- function(year1, year2){
+  
+  #add year, month, and day columns to the discharge data
+  discharge_date_adj <- discharge_data %>%
+    mutate(d = day(Date),
+           mo = month(Date),
+           yr = year(Date),
+           discharge = X_00060_00003) %>%
+    select(yr, mo, d, discharge)
+  
+  #filter discharge data for the first year of the input function
+  yr1 <- discharge_date_adj %>%
+    filter(yr == year1) %>%
+    mutate(adj_date = make_date(year = 2000, month = mo, day = d)) %>%
+    mutate(yr = as.character(yr)) %>%
+    select(yr, adj_date, discharge)
+
+  #filter discharge data for the second year of the input function
+  yr2 <- discharge_date_adj %>%
+    filter(yr == 2020) %>%
+    mutate(adj_date = make_date(year = 2000, month = mo, day = d)) %>%
+    mutate(yr = as.character(yr)) %>%
+    select(yr, adj_date, discharge)
+  
+  #combine the two years of data into a single data frame
+  yr1yr2_compare <- rbind(yr1, yr2)
+  
+  #set the year of data as a character for plotting
+  yr1yr2_compare <- yr1yr2_compare %>%
+    mutate(yr = as.character(yr))
+  
+  theme_set <- theme_bw() +
+    theme(
+      panel.background = element_blank(),
+      axis.title.x = element_blank(),
+      text = element_text(size = 16),
+      legend.text = element_text(size = 16)
+    ) 
+  
+  #create a plotting function in ggplot to compare the years
+  p_compare_yrs <- ggplot2::ggplot(data = yr1yr2_compare) + 
+    geom_line(aes(adj_date, discharge, color = yr), size = 1) +
+    scale_color_manual(values = c("#003349", "#719949")) + 
+    ylab("Daily discharge (cfs)") +
+    labs(color = "Year", size = 16) +
+    theme_set
+  
+  #return the plotting function when the function is called
+  return(p_compare_yrs)
+  
+  }
+
+# set varible p to the returned value of function compare_yrs_plot(first date, second date)
+p <- compare_yrs_plot(2005, 2020)
+
+# print plot comparing two years
+p
+
+# print plot using ggplotly, which allows for interactive exploration of plot
+plotly::ggplotly(p)
+
+# remove unncessary objects
+rm(compare_yrs_plot, p)
+
+## explore plots for annual average discharge
+# define water year as data between October and September
+
+#add year, month, and day columns to the discharge data
+discharge_date_adj <- discharge_data %>%
+  mutate(d = day(Date),
+         mo = month(Date),
+         yr = year(Date),
+         discharge = X_00060_00003) %>%
+  select(yr, mo, d, discharge)
+
+wy_stats <- discharge_date_adj %>%
+  mutate(water_yr = ifelse(mo >= 10, yr+1, yr))
+
+# summarize discharge data by water year
+wy_stats <- wy_stats %>%
+  group_by(water_yr) %>%
+  summarize(q_avg = mean(discharge), q_med = median(discharge)) %>%
+  ungroup()
+
+#create regression line for the average annual discharge stats
+reg_line <- lm(wy_stats$water_yr ~ wy_stats$q_avg)
+reg_line_summary <- summary(reg_line)
+
+#create a theme for the figures
+theme_set <- theme_bw() +
+  theme(
+    panel.background = element_blank(),
+    axis.title.x = element_blank(),
+    text = element_text(size = 16),
+    legend.text = element_text(size = 16)
+  ) 
+
+
+# create plot with linear regression line
+p_lreg <- ggplot2::ggplot(aes(water_yr, q_avg), data = wy_stats) + 
+  geom_point() +
+  geom_smooth(method = 'lm', color = "#003349") +
+  annotate("text", 
+           x = 2000, 
+           y = 400, 
+           label = paste0("r2: ", round(reg_line_summary$r.squared,3)), 
+           size = 5, 
+           color = "#003349") +
+  ylab("Annual mean discharge (cfs)") +
+  theme_set
+
+# print plot with linear regression
+p_lreg
+
+# create plot with smoothed value
+p_smooth <- ggplot2::ggplot(aes(water_yr, q_avg), data = wy_stats) + 
+  geom_point() +
+  geom_smooth(method = 'auto', color = "#003349") +
+  ylab("Annual mean discharge (cfs)") +
+  theme_set
+
+# print plot with smoothed value
+p_smooth
+
+# create regression line for the median annual discharge stats
+reg_line_median <- lm(water_yr ~ q_med, data = wy_stats)
+reg_line_median <- summary(reg_line_median)
+
+# compare median and mean values for each year
+p_med <- ggplot2::ggplot(aes(water_yr, q_med), data = wy_stats) +
+  geom_point() +
+  geom_smooth(method = 'lm', color = "#003349") +
+  annotate("text", 
+           x = 2000,
+           y = 200,
+           label = paste0("r2: ", round(reg_line_median$r.squared, 3))) +
+  ylab("Annual median discharge (cfs)") +
+  theme_set
+
+# print plot to compare mean and median values
+p_med
+
+
+# remove unncessary objects
+rm(wy_stats, reg_line, reg_line_summary, reg_line_median, p_lreg, p_smooth, 
+   p_med, theme_set)
+
+## Explore plots for monthly average values
+# summarize data by month
+mo_stats <- discharge_date_adj %>%
+  group_by(mo) %>%
+  summarize(q_avg = mean(discharge), q_med = median(discharge))
+
+# plot average monthly flow for entire time period
+p <- ggplot2::ggplot(data = mo_stats) + 
+  geom_bar(aes(mo, q_avg, fill = "Average annual \n discharge (cfs)"), stat = "identity", color = "#003349") +
+  scale_x_continuous(breaks = seq(1, 12, 1)) +
+  xlab("Month") +
+  ylab("Average monthly discharge (cfs)") +
+  theme_bw() + 
+  theme(
+    panel.background = element_blank(),
+    text = element_text(size = 16),
+    legend.text = element_text(size = 16),
+    panel.grid.major.x = element_blank(),
+    axis.ticks.x = element_blank()
+    ) +
+  geom_point(aes(mo, q_med, color = "Median monthly \n discharge (cfs)"), data = mo_stats, size = 3) +
+  scale_fill_manual("", values = c("#003349")) + 
+  scale_color_manual("", values = c("#B9D9EB")) 
+
+#print plot comparing average monthly flow
+p
+
+# remove unncessary objects
+rm(mo_stats, p, discharge_date_adj)
+
+```
+
+## Step 5: Create flow duration curve
+
+A flow duration curve is created to evaluate the exceedance probability for a specific date in the analysis.
+
+```{r, message = FALSE, warning = FALSE}
+
+# set a new variable equal to all discharges from discharge data
+fl_dur_data <- discharge_data %>%
+  select(X_00060_00003)
+
+# sort the discharge data at the site by decreasing order
+fl_dur_data <- as.data.frame(sort(fl_dur_data$X_00060_00003, 
+                                  decreasing = TRUE))
+
+# change the name of the column from X_00060_00003 to discharge
+colnames(fl_dur_data) <- c("discharge")
+
+# count the number of rows in the fl_dur_data dataframe
+fd_rows <- nrow(fl_dur_data)
+
+# rank the flows and calculate an exceedance probablity
+fl_dur_data <- fl_dur_data %>% 
+  mutate(ranked = 1:fd_rows) %>%
+  mutate(exceed_prob = ranked/fd_rows)
+
+# create a plot in ggplot to display the exceedance probablity versus the discharge
+p <- ggplot2::ggplot(data = fl_dur_data, aes(exceed_prob, discharge)) + geom_line()
+
+# print plot for exceedance probability
+p         
+
+# set a theme for the plotting functions
+theme_set <- theme_bw() +
+  theme(
+    panel.background = element_blank(),
+    text = element_text(size = 16)
+  )
+
+# create a plot with additional formatting
+p1 <- p + theme_set +
+  scale_y_continuous(trans = "log10") +
+  scale_x_continuous(breaks = seq(0,1,0.1)) +
+  xlab("Exceedance Probability") +
+  ylab("Discharge (cfs)") + 
+  geom_vline(xintercept = 0.5, color = "lightblue") +
+  geom_hline(yintercept = median(fl_dur_data$discharge), color = "lightblue")
+
+# print plot with additional formating
+p1
+
+# identify a date of interest to estimate exceedance probablity
+flow_date = as.Date("2020-01-01")
+
+#filter the discharge data to identify the discharge associated with the specified date
+find_exceed_prob <- discharge_data %>%
+  filter(Date == flow_date) %>%
+  mutate(discharge = X_00060_00003) %>%
+  select(Date, discharge)
+
+#find the exceedance probablity associated with the discharge of interest
+find_exceed_prob <- fl_dur_data %>%
+  filter(discharge == find_exceed_prob$discharge) %>%
+  select(exceed_prob, discharge)
+
+#add exceedance data for the date of interest to the plot
+p2 <- p1 + geom_point(data = find_exceed_prob, aes(exceed_prob, discharge), color = "red", size = 5)
+
+# print the plot to identify point of selected flow date
+p2
+
+#remove unncessary objects
+rm(p, p1, p2, fl_dur_data, find_exceed_prob, theme_set, fd_rows, flow_date)
+
+```
+
+## Step 6: Perform baseflow separation
+
+Baseflow separation helps visualize and calculate the flow originating from baseflow versus flow originating from runoff. Many methods of baseflow separation are available. This example compares baseflow separation calculated by recursive digital filters and the smoothed minima method.
+
+### Step 6a. Evaluate dates discharge data to determine any gaps in data
+
+The baseflow separation methods require a continuous dataset. The long-term discharge data are evaluate to create a continuous dataset with no missing dates. 
+
+```{r, message = FALSE, warning = FALSE}
+# find the dates with discharge data
+flow_dates <- discharge_data$Date
+
+# create a vector with continuous daily time series between the maximum and minimum dates of discharge data
+date_range <- seq(min(flow_dates), max(flow_dates), by = 1)
+
+# identify missing dates in discharge data
+missing_dates <- as.data.frame(date_range[!date_range %in% flow_dates])
+colnames(missing_dates) <- c("Date")
+
+# convert date_range to a data frame and change column name to Date
+date_range <- as.data.frame(date_range)
+colnames(date_range) <- c("Date")
+
+# identify the dates within the total date range that have no data; set a value equal to 1
+date_range <- date_range %>% 
+  mutate(no_data = ifelse(Date %in% missing_dates$Date, 1, 0))
+
+# create an object to generate a plot for date_range 
+p <- ggplot(aes(Date, no_data), data = date_range) + 
+  geom_line()
+p
+
+# plot the data using ggplotly (interactive exploration)
+plotly::ggplotly(p)
+
+## discharge data between 1996-09-30 and 1997-11-30 & 2020-11-10 and 2020-11-16 are missing
+# trim discharge data to 1998-01-01 and 2020-10-31
+bf_sep_discharge <- discharge_data %>%
+  filter(Date >= as.Date("1998-01-01") & Date <= as.Date("2020-10-31")) %>%
+  mutate(discharge = X_00060_00003) %>%
+  select(Date, discharge)
+
+# remove objects from previous assessment
+rm(flow_dates, date_range, missing_dates, p)
+
+#create a vector of only discharge data
+discharge_values <- bf_sep_discharge$discharge
+
+```
+
+### Step 6b. Perform baseflow separation using recursive digital filter
+
+The recursive digital filter uses methods from signal processing to estimate the baseflow. It evaluates discharge data to remove spikes and create a smoothed dataset. The smoothed dataset represents the baseflow.
+
+```{r, message = FALSE, warning = FALSE}
+
+## perform baseflow separation using BaseflowSeparation in EcoHydRology package
+## BaseflowSeparation uses recursive digital filtering to find baseflow (more info in vignette)
+
+# create a vector with three filter parameters to be evaluated (0.900, 0.925, 0.950)
+filter_parameters <- c(0.900, 0.925, 0.950)
+#assign a counter function to use in the for loop
+counter <- 1
+
+# run a for loop through all values of filter_parameters
+for(i in filter_parameters){
+  
+  # use BaseflowSeparation function to estimate baseflow using filter parameter assigned in loop (i)
+  bf_rdf_temp <- EcoHydRology::BaseflowSeparation(streamflow = discharge_values, filter_parameter = i, passes = 3)
+  
+  # combine the original bf_sep_discharge data with the baseflow values from BaseflowSeparation
+  bf_rdf_temp <- cbind(bf_sep_discharge, bf_rdf_temp)
+  
+  # change the column names in the bf_rdf_tmp data frame
+  colnames(bf_rdf_temp) <- c("Date", "discharge", "bf_rdf", "qf_rdf")
+  
+  # add a column to identify which filter paramter is used
+  bf_rdf_temp <- bf_rdf_temp %>% mutate(filter_param = i)
+  
+  # if the filter parameter is the first in the list, set bf_rdf_temp to a new variable bf_rdf_all
+  if(counter == 1){bf_rdf_all = bf_rdf_temp}
+  # if the filter paramter is not the first in the list, append bf_rdf_temp to bf_rdf_all
+  else{bf_rdf_all = rbind(bf_rdf_all, bf_rdf_temp)}
+
+  #remove temporary data frame
+  rm(bf_rdf_temp)
+  counter <- counter + 1
+  
+}
+
+rm(filter_parameters, counter)
+
+# add zeros to the end of the filter parameter id name so decimal taken out to three places
+bf_rdf_all$filter_param <- sprintf("%.3f", bf_rdf_all$filter_param)
+
+# create a ggplot object to compare the results from different filter parameters
+p <- ggplot(data = bf_rdf_all, aes(Date, discharge, color = "Discharge")) + geom_line(color = "black", size = 1) + 
+  geom_line(data = bf_rdf_all, aes(Date, bf_rdf, color = filter_param), size = 1)
+
+# add formatting to plot
+p <- p + theme_bw() + 
+  xlab(element_blank()) + 
+  ylab("Discharge (cfs)") + 
+  xlim(as.Date("2015-01-01"), as.Date("2019-12-31")) + 
+  theme(text = element_text(size = 16)) +
+  labs(color = "Filter Parameter")
+
+# print plot to compare the results from different filter parameters
+p
+
+# remove ggplot object
+rm(p, i)
+
+## calculate baseflow index for rdf method
+# create a new matrix to store values for baseflow index for each filter parameter
+bfi_rdf_matrix <- matrix(0,length(unique(bf_rdf_all$filter)),2)
+
+#rename columns of bfi_rdf_matrix
+colnames(bfi_rdf_matrix) = c("Filter Parameter", "bfi")
+
+#create a new list of unique block names in bf_rdf_all
+filter_name <- unique(bf_rdf_all$filter_param)
+
+#create a row counting variable
+row_num = 1
+
+# run a for loop to calculate baseflow index for each filter parameter
+for(i in filter_name){
+  
+  # filter out the value from bfi_rdf_all by the block name of the loop
+  bfi_calc <- bf_rdf_all %>%
+    filter(filter_param == i)
+  
+  # calculate the baseflow index by dividing the total baseflow by the total flow
+  bfi_value <- sum(bfi_calc$bf_rdf, na.rm = TRUE)/sum(bfi_calc$discharge, na.rm = TRUE)
+  
+  # assign filter parameter name and baseflow index value to matrix
+  bfi_rdf_matrix[row_num, 1] = i
+  bfi_rdf_matrix[row_num, 2] = round(bfi_value,3)
+  
+  # remove bfi_calc and bfi_value 
+  rm(bfi_calc, bfi_value)
+  
+  # add one to row counting varaible
+  row_num <- row_num + 1
+  
+}
+
+rm(filter_name, row_num)
+
+```
+
+### Step 6c. Perform baseflow separation using smoothed minima method
+
+The smoothed minima method uses an approach that is different from the recursive digital filter. The smoothed minima method evaluates the discharge data to identify local minima. Local minima are connected by straight lines, and the straight lines reprsent the baseflow. 
+
+```{r, message = FALSE, warning = FALSE}
+
+# create a list of different block lengths in days
+block_length <- c(2, 5, 7)
+
+#create a counter variable for the for loop
+counter <- 1
+
+# run a four loop for the block_length list 
+for(i in block_length){
+  # calculate the baseflow using the smoothed minima method
+  bf_smm_temp <- lfstat::baseflow(discharge_values, tp.factor = 0.9, block.len = i)
+  
+  # combine the discharge data with the smoothed minima data
+  bf_smm_temp <- cbind(bf_sep_discharge, bf_smm_temp)
+  
+  # update the column names in bf_smm_temp
+  colnames(bf_smm_temp) <- c("Date", "discharge", "bf_smm")
+  
+  # add a column to identify the block length
+  bf_smm_temp <- bf_smm_temp %>% mutate(block = paste0(i, " day"))
+  
+  # if the block length is the first in the list, set bf_sm_temp equal to a new variable, bf_smm_all
+  if(counter == 1){bf_smm_all = bf_smm_temp}
+  # if block length is not the first in the list, append bf_smm_temp to bf_smm_all
+  else{bf_smm_all = rbind(bf_smm_all, bf_smm_temp)}
+  
+  #remove bf_smm_temp
+  rm(bf_smm_temp)
+  
+  #add one to counter variable
+  counter <- counter + 1
+
+  }
+
+# remove block_length and counter variables
+rm(block_length, counter, i)
+
+# create ggplot object for plotting
+p <- ggplot(data = bf_smm_all, aes(Date, discharge, color = "Discharge")) + geom_line(color = "black", size = 1) +
+  geom_line(data = bf_smm_all, aes(Date, bf_smm, color = block), size = 1)
+
+#add formatting to plot
+p <- p + theme_bw() + 
+  xlab(element_blank()) + 
+  ylab("Discharge (cfs)") + 
+  xlim(as.Date("2015-01-01"), as.Date("2019-12-31")) + 
+  theme(text = element_text(size = 16)) +
+  labs(color = "Block Length")
+
+# print plot comparing the block lengths
+p
+
+#remove ggplot object
+rm(p)
+
+## calculate baseflow index for smm method
+# create a new matrix to store values for baseflow index for each block
+bfi_smm_matrix <- matrix(0,length(unique(bf_smm_all$block)),2)
+
+#rename columns of bfi_smm_matrix
+colnames(bfi_smm_matrix) = c("Block Length", "bfi")
+
+#create a new list of unique block names in bf_smm_all
+block_name <- unique(bf_smm_all$block)
+
+#create a row counting variable
+row_num = 1
+
+# run a for loop to calculate baseflow index for each block length
+for(i in block_name){
+  
+  # filter out the value from bfi_smm_all by the block name of the loop
+  bfi_calc <- bf_smm_all %>%
+    filter(block == i)
+  
+  # calculate the baseflow index by dividing the total baseflow by the total flow
+  bfi_value <- sum(bfi_calc$bf_smm, na.rm = TRUE)/sum(bfi_calc$discharge, na.rm = TRUE)
+  
+  # assign baseflow name and baseflow index value to matrix
+  bfi_smm_matrix[row_num, 1] = i
+  bfi_smm_matrix[row_num, 2] = round(bfi_value, 3)
+  
+  # remove bfi_calc and bfi_value 
+  rm(bfi_calc, bfi_value)
+  
+  # add one to row counting varaible
+  row_num <- row_num + 1
+  
+}
+
+# remove variables used for calculation of baseflow index
+rm(block_name, row_num)
+rm(bfi_rdf_matrix, bfi_smm_matrix, i)
+
+```
+
+### Step 6d. Compare results from two baseflow methods
+
+The two baseflow methods use different theorteical approaches to estimate baseflow, and the outcome of the separation are not the same. The two methods can be compared to better understand how each method characterizes the baseflow.
+
+```{r, message = FALSE, warning = FALSE}
+
+
+# filter the bf_rdf_all data frame for specified filter parameter; reformat table
+bf_rdf <- bf_rdf_all %>%
+  filter(filter_param == "0.925") %>%
+  mutate(method = "RDF", bf = bf_rdf)%>%
+  select(Date, discharge, bf, method)
+
+# filter the bf_smm_all data frame for the specified block length; reformat table
+bf_smm <- bf_smm_all %>%
+  filter(block == "5 day") %>%
+  mutate(method = "SMM", bf = bf_smm) %>%
+  select(Date, discharge, bf, method)
+
+# combine the results from the recursive digital filter and smoothed minima methods
+bf_compare <- rbind(bf_rdf, bf_smm)
+
+# plot the data for RDF and SMM to compare the results of baseflow separation
+p <- ggplot(data = bf_compare, aes(Date, discharge, color = "Discharge")) + 
+  geom_line() +
+  geom_line(data = bf_compare, aes(Date, bf, color = method), size = 1.1) +
+  labs(color = "Method") +
+  scale_color_manual(values = c("grey70","#FF9E1B","#0075A5")) +
+  xlab(element_blank()) +
+  ylab("Discharge (cfs)") +
+  xlim(c(as.Date("2015-01-01"), as.Date("2019-12-13"))) +
+  scale_y_continuous(limits = c(0,2500)) +
+  theme_bw() +
+  theme(text = element_text(size = 16))
+
+# print the graph object
+p
+
+# remove unncessary objects
+rm(p, bf_rdf, bf_rdf_all, bf_smm, bf_smm_all, bf_sep_discharge)
+## summarize baseflow data by year
+# add year, month, and day columns to bf_compare
+bf_compare <- bf_compare %>%
+  mutate(yr = year(Date), mo = month(Date), d = day(Date))
+
+# summarize data by year and by method (divide discharge by 365 and methods by 365)
+bf_compare_yr <- bf_compare %>%
+  group_by(yr, method) %>%
+  summarize(discharge = sum(discharge, na.rm = TRUE)/365, bf = sum(bf, na.rm = TRUE)/365)
+
+# create a data frame for average daily discharge per year
+bf_compare_yr_discharge <- bf_compare_yr %>%
+  filter(method == "RDF") %>%
+  select(yr, discharge)
+
+# create a bar plot to compare reuslts for the methods
+p <- ggplot(data = bf_compare_yr_discharge, aes(x = yr, y = discharge, fill = "Discharge")) + 
+  geom_bar(stat = "identity") +
+  geom_bar(data = bf_compare_yr, 
+           aes(x = yr, y = bf, fill = method), 
+           stat = "identity", 
+           position = position_dodge()) +
+  scale_fill_manual(values = c("grey70","#FF9E1B","#0075A5")) +
+  theme_bw() +
+  labs(fill = "Method") +
+  theme(text = element_text(size = 16), panel.grid.major.x = element_blank()) +
+  scale_x_continuous(name = "Year", breaks = c(2010:2020, 1),limits = c(2009.5,2020.5)) +
+  ylab("Average daily discharge (cfs)")
+
+# plot the bar chart
+p
+
+# remove unncessary objects
+rm(bf_compare_yr, bf_compare_yr_discharge, p)
+
+## summarize baseflow data by month
+# calculate the average daily baseflow by month and method
+bf_compare_mo <- bf_compare %>%
+  group_by(mo, method) %>%
+  summarize(discharge = mean(discharge, na.rm = TRUE), bf = mean(bf, na.rm = TRUE))
+
+# create a data frame for average discharge by month
+bf_compare_mo_discharge <- bf_compare_mo %>%
+  filter(method == "RDF") %>%
+  select(mo, discharge)
+
+# create a bar chart to compare the two methods by month
+p <- ggplot(data = bf_compare_mo_discharge, aes(mo, discharge, fill = "Discharge")) + 
+  geom_bar(stat = "identity") +
+  geom_bar(data = bf_compare_mo, 
+           aes(mo, bf, fill = method), 
+           stat = "identity", 
+           position = position_dodge()) +
+  scale_fill_manual(values = c("grey70","#FF9E1B","#0075A5")) +
+  theme_bw() +
+  labs(fill = "Method") +
+  theme(text = element_text(size = 16), panel.grid.major.x = element_blank()) +
+  scale_x_continuous(name = "Month", breaks = c(1:12, 1),limits = c(0.5, 12.5)) +
+  ylab("Average daily discharge (cfs)")
+
+#print the bar chart
+p
+
+# remove unncessary objects
+rm(bf_compare, bf_compare_mo, bf_compare_mo_discharge, p)
+
+```

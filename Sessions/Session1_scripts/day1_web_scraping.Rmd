@@ -1,0 +1,230 @@
+---
+title: "Web Scraping"
+author: "Eric Hettler, Wisconsin DNR"
+date: "2021-09-20"
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## Intro
+Web scraping is a method of extracting data from websites so they are more usable. When web scraping is autmoated using R or other programing languages, the method allows users to quickly and efficiently access large quanitites of data. 
+
+This session includes four examples: 
+
+1. Manually extract data from websites (no R code required)
+2. Download links from EPA's surface water quality modeling training website
+3. Scrape data from the Daymet website
+4. Dynamically interact with Atlas 14 website
+
+## Setup
+
+```{r setup, include=FALSE}
+
+#install.packages("rvest")
+#install.packages("tidyverse")
+#install.packages("xml2")
+#install.packages("RSelenium")
+
+library(rvest)
+library(tidyverse)
+library(xml2)
+library(RSelenium)
+
+# set the project directory as the working directory
+getwd()
+
+```
+
+## Example 1. Manually extract data from website (no R code required)
+
+Web scraping is generally defined as extracting data from a website so they more usable. The definition includes simple copying data from websites and pasting them into a spreadsheet.
+
+### Manual
+
+1. Navigate to EPA Surface Water Quality Modeling Training at https://www.epa.gov/waterdata/surface-water-quality-modeling-training
+2. Highlight the "Topic and Description" and "Training" columns in the table
+3. Right-click the highlighted text and select Copy
+4. Open Excel and paste the data into a spreadsheet
+
+## Example 2. Download links EPA's surface water quality modeling training website 
+
+The steps in Example 1 can be automated using tools and libraries within R. 
+
+### Manual
+
+1. Read HTML code into R using `rvest` package (see more details below)
+2. Navigate to the EPA Surface Water Quality Modeling Training website inspect the HTML code for the table
+  2a. Right-click the table and select Inspect
+  2b. Identify the node name associated with the table (.view-model-full in this example)
+3. Load the name of the training modules into a vector
+4. Load the links of the training modules into a vector
+5. Combine the vectors into a single table
+6. Save the newly created table into a .csv file
+
+### R Package: rvest
+
+`rvest` allows users to read HTML code from a website and extract data from the HTML code. The `read_html` function allows users to load the HTML code into R. The `html_nodes` function selects data from a specific HTML node. The `html_attr` function selects a single attribute from the specified HTML node.
+
+[Documentation can be found here](https://cran.r-project.org/web/packages/rvest/rvest.pdf)
+
+
+```{r, message = FALSE, warning = FALSE}
+# specify the url for desired website to be scraped
+url <- 'https://www.epa.gov/waterdata/surface-water-quality-modeling-training'
+
+# read the HTML code from the website
+webpage <- rvest::read_html(url)
+
+# copy the name of the training from the website
+link_name <- rvest::html_nodes(webpage, '.view-mode-full a')
+
+# save the text from the html code to a new variable
+links_data <- rvest::html_text(link_name)
+
+# copy the links to the website and save to a new variable
+links_html <- rvest::html_nodes(webpage, '.view-mode-full a') %>% 
+  rvest::html_attr('href')
+
+# combine the two tables into a single table
+webpage_table <- cbind(links_data, links_html)
+
+# write the table into a .csv file
+write.csv(webpage_table, file = "./Data/Processed/SWQM_webpage_table.csv")
+
+# clear the environment
+rm(link_name, webpage, webpage_table, links_data, links_html, url)
+
+```
+
+## Example 3. Scrape data from Daymet website
+
+Daymet is a product from the Environmental Sciences Division at the Oak Ridge National Laboratory. It provides long-term, continuous, gridded estimates of daily weather and climatology variables by interpolating and extrapolating ground-based observations through statistical modeling techniques. More information about Daymet can be found on their website at https://daymet.ornl.gov/.
+
+### Manual
+
+1. Load manitowoc_subs_centroid.csv file into R (Note: Data in the .csv file represent the latitude/longitude data for the centroid of subbasins)
+2. Separate the url for Daymet into distinct pieces/variables: site prefix, latitude, longitude, variables to download, begin date, and end date 
+  - Example link: https://daymet.ornl.gov/single-pixel/api/data?lat=35.2&lon=-84.5&vars=dayl,prcp,srad,swe,tmax,tmin,vp&start=1998-01-01&end=2019-12-31
+  - Note: Accessing the link will automatically download a .csv file
+3. Loop through the rows of the imported .csv file to create unique links for the latitude and longitude of each location
+4. Save the data from each unique link to a file with a unique, user-specified name
+
+```{r, message = FALSE, warning = FALSE}
+
+# load information from txt file containing subbasin number, latitude, longitude
+subbasin_data <- read.csv(file="./Data/Raw/manitowoc_subs_centroid.csv")
+
+# count number of rows in subbasin_data
+num_rows <- nrow(subbasin_data)
+
+# set the prefix for the site to be downloaded
+site_prefix <- "https://daymet.ornl.gov/single-pixel/api/data?"
+
+# set variables to be downloaded
+variables <- "dayl,prcp,srad,swe,tmax,tmin,vp"
+
+# set beginning date and end date of interest
+begin_date <- "1998-01-01"
+end_date <- "2020-12-31"
+
+# loop through the subbasin list to download data from Daymet
+for(i in 1:nrow(subbasin_data)){
+  
+  # set subbasin, subbasin latitude, and subbasin longitude
+  subbasin = subbasin_data[i,4]
+  site_long = subbasin_data[i,5]
+  site_lat = subbasin_data[i,6]
+  
+  # set file name for downloaded data
+  file_name = paste("./Data/Processed/Daymet_downloads/manitowoc_sub_",subbasin,".csv",sep="")
+  
+  # create link to website for downloading HUC 12 data
+  subbasin_download_link=paste(site_prefix,"lat=",site_lat,"&lon=",site_long,
+                            "&vars=dayl,prcp,srad,swe,tmax,tmin,vp&start=",
+                            begin_date,"&end=",end_date,sep="")
+  
+  # download file from daymet website
+  download.file(subbasin_download_link,file_name)
+  
+} # end of for loop
+
+rm(subbasin_data, begin_date, end_date, file_name, i, num_rows, site_lat, site_long, 
+   site_prefix, subbasin, subbasin_download_link, variables)
+
+```
+
+## Example 4. Dynamically interact with Atlas 14 website 
+
+Web scraping can also be performed by interactively with browsers to extract data. Interactive scraping can be used to download Atlas 14 data for a list of locations. Atlas 14 data can be acessed from the website at https://hdsc.nws.noaa.gov/hdsc/pfds/pfds_map_cont.html. Atlast 14 data can be accessed using methods detailed in Example 3 (see Question 2.5 on the FAQ page at https://www.weather.gov/owp/hdsc_faqs), but this example describes a different methodology for illustration purposes. 
+
+### Manual
+1. Load locations.csv file into R (Note: Data in the .csv file represent the latitude/longitude data for different cities in the Unitd States)
+2. Initialize a new browser instance using `RSelenium`
+3. Navigate to the NOAA precipitation frequency website in the`RSelenium` browser instance using the following link: https://hdsc.nws.noaa.gov/hdsc/pfds/pfds_map_cont.html
+4. Identify the element name for the latitude and longitude columns by right-clicking the latitude and longitude boxes, selecting Inspect, and viewing the html code to find the id name.
+  - Latitude id name: id="manLat"
+  - Longitude id name: id="manLong"
+5. Identify the element name/Xpath for the Submit button and the Download button by right-clicking the latitude and longtiude boxes, selecting Inspect, and reviewing the html code.
+  - Submit button: id="latlonButton"
+  - Download button: xpath = '//*[@id="Table_Section"]/input'
+6. Populate latitude and longitude data from the locations .csv file into the latitude and longitude text boxes in the `RSelenium` browser instance using the `findElement` and `sendKeysToElement` functions
+7. Automatically click the Submit and Download buttons in the `RSelenium` browser instance using the `findElement` and `clickElement` functions
+8. .csv files for  the latitude and longitude specified are automatically downloaded to the user's Downloads folder
+
+### R Package: RSelenium
+
+`RSelenium` is a package that connects to a Selenium server, which allows users to easily automate web browsing. The package includes functions that allow users to open a web instance, navigate to a website, and interact iwth the website in R. 
+
+[Documentation can be found here](https://cran.r-project.org/web/packages/RSelenium/vignettes/basics.html)
+
+```{r, message = FALSE, warning = FALSE}
+
+# if the port is busy, run this line to clear all ports
+system("taskkill /im java.exe /f", intern=FALSE, ignore.stdout=FALSE)
+
+# open a remote driver from RSelenium
+rD <- RSelenium::rsDriver(browser = "chrome", chromever = "89.0.4389.23")
+remDr <- rD[["client"]]
+
+# load the atlas14_city_locations.csv data into R
+atlas14_locations <- read.csv(file = "./Input/atlas14_city_locations.csv")
+
+# navigate the remote driver to the NOAA PF website
+remDr$navigate("https://hdsc.nws.noaa.gov/hdsc/pfds/pfds_map_cont.html")
+
+# loop through the city locations to download the PFD curves
+for(i in 1:nrow(atlas14_locations)){
+  
+  #refresh the webpage
+  remDr$refresh()
+  
+  # select the box on the page for inputting latitude; set latitude equal to some value
+  lat_element <- remDr$findElement(using = 'id', value = "manLat")
+  lat_element$clearElement()
+  lat_element$sendKeysToElement(list(as.character(atlas14_locations[i,2])))
+  
+  # select the box on the page for inputing longitude; set longitude equal to value
+  long_element <- remDr$findElement(using = 'id', value = "manLon")
+  long_element$clearElement()
+  long_element$sendKeysToElement(list(as.character(atlas14_locations[i,3])))
+  
+  # click the Submit button to select the location associated with the lat-long 
+  button_element <- remDr$findElement(using = 'id', value = "latlonButton")
+  button_element$clickElement()
+  
+  # pause the system to allow the data to be loaded
+  Sys.sleep(1)
+  
+  # identify the download button using the xpath; click the button to download
+  # note: files download to "Downloads" folder
+  download_button_element <- remDr$findElement(using = 'xpath', value = '//*[@id="Table_Section"]/input')
+  download_button_element$clickElement()                                             
+
+}
+
+# remove objects from environment
+rm(atlas14_locations, locations, button_element, city_names, download_button_element, i, lat_element, long_element, rD, remDr, get_lat_long)
+
+
+```
