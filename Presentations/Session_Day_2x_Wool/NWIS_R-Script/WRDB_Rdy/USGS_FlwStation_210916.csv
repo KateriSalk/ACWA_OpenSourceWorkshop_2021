@@ -1,0 +1,6 @@
+"Station_ID","Station_Name","Latitude","Longitude","Elevation_ft","HUC","Dr_Area_sq_mi","Vert_Datum","Datum","Agency","State"
+"USGS-02335000","Chattahoochee River Near Norcross, Ga",33.9972222,-84.2019444,878.2,"03130001",1170,"NAVD88","NAD83","USGS","GA"
+"USGS-02335450","Chattahoochee River Above Roswell, Ga",33.98593369,-84.3160356,858.6,"03130001",1220,"NAVD88","NAD83","USGS","GA"
+"USGS-02336000","Chattahoochee River At Atlanta, Ga",33.85916667,-84.4544444,750.3,"03130001",1450,"NAVD88","NAD83","USGS","GA"
+"USGS-02336490","Chattahoochee River At Ga 280, Near Atlanta, Ga",33.81694444,-84.48,736.6,"03130002",1590,"NAVD88","NAD83","USGS","GA"
+"USGS-02341460","Chattahoochee River At 14th St, At Columbus, Ga",32.47277778,-84.9966667,190,"03130003",4630,"NAVD88","NAD83","USGS","GA"

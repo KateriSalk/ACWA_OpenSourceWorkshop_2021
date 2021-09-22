@@ -1,0 +1,13 @@
+Parameter,Pcode,Units
+"BOD, 5-Day (20 Deg. C)",BOD,mg/L
+"Oxygen, Dissolved (DO)",DO,mg/L
+"Flow, in conduit or thru treatment plant",FLOW,MGD
+"Nitrogen, Ammonia Total (as N)",NH3,mg/L
+Nitrite plus Nitrate Total (as N),NOX,mg/L
+pH,PH,SU
+"Phosphate, Ortho (as PO4)",PO4,mg/L
+"Nitrogen, Kjeldahl, Total (as N)",TKN,mg/L
+"Nitrogen, Total (as N)",TN,mg/L
+"Phosphorus, Total (as P)",TP,mg/L
+"Solids, Total Suspended",TSS,mg/L
+"Temperature, Water Deg. Centigrade",WTEMP,deg C

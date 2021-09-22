@@ -1,0 +1,2 @@
+"USGS_Queried","USGS_Gages_w_Data","Date_of_Query","Date_Range_Queried","variableCode","variableName","variableDescription","valueType","unit","options","noDataValue","statisticCd","statisticName"
+"02336000; 02335450; 02341460; 02335000; 02336490","02341460; 02336490; 02336000; 02335450; 02335000",2021-09-13 09:58:18,"1995-01-01; 2021-12-31","00060","Streamflow, ft&#179;/s","Discharge, cubic feet per second","Derived Value","ft3/s","Mean",NA,"00003","Mean"

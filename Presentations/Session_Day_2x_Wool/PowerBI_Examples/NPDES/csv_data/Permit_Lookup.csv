@@ -1,0 +1,35 @@
+Permit,Stat_Code,Station_Name,County_Name,Station_Type,Latitude,Longitude,HUC12,HUC12_Name
+NC0000892,ArclinUSAInc,"Arclin USA, Inc",Chatham,Major,35.6025,-79.05028,30300020705,Shaddox Creek-Haw River
+NC0001899,MoncureWestWWTP,Moncure Holdings West WWTP,Chatham,Major,35.61783893,-79.0393038,30300020705,Shaddox Creek-Haw River
+NC0002861,SanfordWTP01,Sanford WTP,Lee,Minor,35.53783849,-79.05018709,30300040104,Gulf Creek-Cape Fear River
+NC0003573,Chemours02,Chemours Company-Fayetteville Works,Bladen,Major,34.83889,-78.83667,30300050104,Phillips Creek-Cape Fear River
+NC0003719,CedarCkSite,Cedar Creek Site,Cumberland,Major,34.97833,-78.78333,30300040707,Locks Creek-Cape Fear River
+NC0003964,FtBraggWWTP,Fort Bragg WWTP & WTP,Cumberland,Major,35.17778,-79.02917,30300040405,Tank Creek-Little River
+NC0007684,HarnettCntyRegWTP,Harnett County Regional WTP,Harnett,Minor,35.40833,-78.81667,30300040505,Dry Creek-Cape Fear River
+NC0007820,FranklinvilleWWTP,Franklinville WWTP,Randolph,Minor,35.73694,-79.68556,30300030203,Millstone Creek-Deep River
+NC0021636,NHarnettRegWWTP,North Harnett Regional WWTP,Harnett,Major,35.40139,-78.80028,30300040505,Dry Creek-Cape Fear River
+NC0023957,CrossCkWWTP,Cross Creek WWTP,Cumberland,Major,35.0625,-78.85611,30300040706,City of Fayetteville-Cape Fear River
+NC0024147,BigBuffaloWWTP,Big Buffalo WWTP,Lee,Major,35.55083,-79.22472,30300030607,Georges Creek-Deep River
+NC0025445,RandlemanWWTP,Randleman WWTP,Randolph,Major,35.80639,-79.78333,30300030108,Town of Randleman-Deep River
+NC0026123,AsheboroWWTP,Asheboro WWTP,Randolph,Major,35.76667,-79.785,30300030110,Hasketts Creek-Deep River
+NC0026441,SilerCityWWTP,Siler City WWTP,Chatham,Major,35.72917,-79.42833,30300030503,Loves Creek-Rocky River
+NC0026514,RaefordWWTP,Raeford WWTP,Hoke,Major,34.97778,-79.19306,30300040604,Upper Rockfish Creek
+NC0026565,RamseurWWTP,Ramseur WWTP,Randolph,Minor,35.71861,-79.65194,30300030203,Millstone Creek-Deep River
+NC0026671,EliztownWWTP,Elizabethtown WWTP,Bladen,Major,34.63139,-78.58944,30300050206,White Lake-Cape Fear River
+NC0030970,SpringLakeWWTP,Spring Lake WWTP,Cumberland,Major,35.19417,-78.96444,30300040408,Town of Twin Lakes-Little River
+NC0038831,CarolinaTraceWWTP,Carolina Trace WWTP,Lee,Minor,35.41667,-79.0875,30300040204,Jones Creek-Upper Little River
+NC0043176,DunnWWTP,Dunn WWTP,Harnett,Major,35.29194,-78.68583,30300040506,Juniper Creek-Cape Fear River
+NC0050105,RockfishCkWWTP,Rockfish Creek WWTP,Cumberland,Major,34.96889,-78.8275,30300040707,Locks Creek-Cape Fear River
+NC0058548,StarWWTP,Star WWTP,Montgomery,Minor,35.39235623,-79.76917491,30300030402,Upper Cabin Creek
+NC0059242,BroadwayWWTP,Broadway WWTP,Harnett,Minor,35.45944,-79.02861,30300040105,Daniels Creek-Cape Fear River
+NC0061719,WoodlakeCCWWTP,Woodlake Country Club WWTP,Moore,Minor,35.2175,-79.18583,30300040307,Lower Crane Creek
+NC0062855,RobbinsWWTP,Robbins WWTP,Moore,Major,35.4797989,-79.55562107,30300030406,Grassy Creek-Deep River
+NC0064521,ErwinWWTP01,Erwin WWTP,Harnett,Major,35.32389,-78.69528,30300040506,Juniper Creek-Cape Fear River
+NC0072575,SanfordProcPlt,Sanford Processing Plant,Lee,Minor,35.56389,-79.21972,30300030607,Georges Creek-Deep River
+NC0076783,HofferWTP,Hoffer WTP,Cumberland,Minor,35.07778,-78.86556,30300040706,City of Fayetteville-Cape Fear River
+NC0078344,TarHeelPlant,Tar Heel Plant,Bladen,Major,34.75211496,-78.79159127,30300050104,Phillips Creek-Cape Fear River
+NC0078955,A.B.UzzleWTP,A.B. Uzzle WTP,Harnett,Minor,35.325,-78.69722,30300040506,Juniper Creek-Cape Fear River
+NC0088366,SHarnettRegWWTP,South Harnett Regional WWTP,Harnett,Major,35.23028,-78.88333,30300040408,Town of Twin Lakes-Little River
+NC0088846,WesternWakeRegWRF,Western Wake Regional WRF,Chatham,Major,35.53611,-78.98472,30300040105,Daniels Creek-Cape Fear River
+NC0089176,HokeCntyWWTP,Hoke County WWTP,Hoke,Major,34.96111,-79.10167,30300040607,Middle Rockfish Creek
+NCG590020,BladenBluffsWTP,Bladen Bluffs Regional Surface WTP,Bladen,Minor,34.76937556,-78.79609065,30300050104,Phillips Creek-Cape Fear River
